@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": true,
+  "always-update": true,
+  "packages": {
+    "apps/telematics-kafka-bridge": {
+      "package-name": "telematics-kafka-bridge",
+      "extra-files": [
+        {
+          "type": "yaml",
+          "path": "../../charts/telematics-kafka-bridge/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        }
+      ]
+    },
+    "apps/sample-api": {
+      "package-name": "sample-api",
+      "extra-files": [
+        {
+          "type": "yaml",
+          "path": "../../charts/sample-api/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        }
+      ]
+    }
+  }
+}

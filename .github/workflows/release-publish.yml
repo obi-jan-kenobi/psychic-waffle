@@ -1,0 +1,112 @@
+name: Release Publish
+
+# Fires once per published release (release-please tags each app as
+# "<app>-v<version>", e.g. sample-api-v0.1.0). Retags the npn-validated
+# image to the released version in ECR and promotes the prod manifest.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # commit prod manifest update
+  id-token: write # AWS OIDC
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 514502807230.dkr.ecr.eu-west-1.amazonaws.com
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse release tag
+        id: tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # Tag format: <app>-v<version>
+          version="${TAG##*-v}"
+          name="${TAG%-v*}"
+          if [ "$name" = "$TAG" ] || [ -z "$name" ] || [ -z "$version" ]; then
+            echo "Unrecognized tag format: $TAG" >&2
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $name version $version"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Retag npn image to release version
+        env:
+          NAME: ${{ steps.tag.outputs.name }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          npn="charts/$NAME/values-npn.yaml"
+          [ -f "$npn" ] || { echo "no npn values for $NAME" >&2; exit 1; }
+
+          # The npn tag is the SHA validated by the retag gate before merge.
+          sha_tag=$(yq -r '.image.tag' "$npn")
+          if [ -z "$sha_tag" ] || [ "$sha_tag" = "null" ]; then
+            echo "$NAME: could not resolve npn image tag" >&2
+            exit 1
+          fi
+
+          echo "$NAME: retagging $sha_tag -> $VERSION"
+          manifest=$(aws ecr batch-get-image \
+            --repository-name "$NAME" \
+            --image-ids imageTag="$sha_tag" \
+            --query 'images[0].imageManifest' --output text)
+          if [ -z "$manifest" ] || [ "$manifest" = "None" ]; then
+            echo "$NAME: source image $sha_tag not found in ECR" >&2
+            exit 1
+          fi
+
+          aws ecr put-image \
+            --repository-name "$NAME" \
+            --image-tag "$VERSION" \
+            --image-manifest "$manifest" >/dev/null 2>&1 \
+            || echo "$NAME: tag $VERSION already exists in ECR"
+
+      - name: Promote prod manifest
+        env:
+          NAME: ${{ steps.tag.outputs.name }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          prod="charts/$NAME/values-prod.yaml"
+          [ -f "$prod" ] || { echo "no prod values for $NAME, skipping"; exit 0; }
+
+          VERSION="$VERSION" yq -i '.image.tag = strenv(VERSION)' "$prod"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "prod manifest already at $VERSION"
+            exit 0
+          fi
+          git add "$prod"
+          git commit -m "chore($NAME): promote prod to $VERSION"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && break
+            echo "Retry push ($i)"
+            sleep 3
+          done

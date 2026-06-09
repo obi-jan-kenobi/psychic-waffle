@@ -1,0 +1,104 @@
+name: Release Retag Gate
+
+# Required check on the release-please PR. Before the PR can be merged this
+# retags the npn-referenced image (currently the commit SHA) to the next
+# release version in ECR and points the npn values at that version.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: release-retag-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # update values-npn.yaml on the PR branch
+  id-token: write # AWS OIDC
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 514502807230.dkr.ecr.eu-west-1.amazonaws.com
+
+jobs:
+  retag:
+    # Only run for release-please PRs.
+    if: startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Retag images to release version and update npn values
+        run: |
+          set -euo pipefail
+          git fetch origin main
+
+          # Iterate over every package release-please manages.
+          for name in $(jq -r '.packages | to_entries[] | .value."package-name"' release-please-config.json); do
+            chart="charts/$name/Chart.yaml"
+            npn="charts/$name/values-npn.yaml"
+            [ -f "$chart" ] || continue
+
+            pr_version=$(yq -r '.appVersion' "$chart")
+            base_version=$(git show origin/main:"$chart" 2>/dev/null | yq -r '.appVersion' || echo "")
+
+            # Only act on apps that are actually being released in this PR.
+            if [ "$pr_version" = "$base_version" ]; then
+              echo "$name: no version change ($pr_version), skipping"
+              continue
+            fi
+
+            # The SHA tag currently deployed to npn lives on the base branch.
+            sha_tag=$(git show origin/main:"$npn" 2>/dev/null | yq -r '.image.tag' || echo "")
+            if [ -z "$sha_tag" ] || [ "$sha_tag" = "null" ]; then
+              echo "$name: could not resolve current npn image tag" >&2
+              exit 1
+            fi
+
+            echo "$name: retagging $sha_tag -> $pr_version"
+            manifest=$(aws ecr batch-get-image \
+              --repository-name "$name" \
+              --image-ids imageTag="$sha_tag" \
+              --query 'images[0].imageManifest' --output text)
+            if [ -z "$manifest" ] || [ "$manifest" = "None" ]; then
+              echo "$name: source image $sha_tag not found in ECR" >&2
+              exit 1
+            fi
+
+            aws ecr put-image \
+              --repository-name "$name" \
+              --image-tag "$pr_version" \
+              --image-manifest "$manifest" >/dev/null 2>&1 \
+              || echo "$name: tag $pr_version already exists in ECR"
+
+            # Point npn at the released version.
+            PR_VERSION="$pr_version" yq -i '.image.tag = strenv(PR_VERSION)' "$npn"
+          done
+
+      - name: Commit npn version updates to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "npn values already point at the release version"
+            exit 0
+          fi
+          git add charts/*/values-npn.yaml
+          git commit -m "chore: point npn at release version"
+          git push origin HEAD:${{ github.head_ref }}

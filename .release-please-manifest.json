@@ -1,0 +1,4 @@
+{
+  "apps/telematics-kafka-bridge": "0.1.0",
+  "apps/sample-api": "0.1.0"
+}

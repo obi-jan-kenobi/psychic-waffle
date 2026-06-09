@@ -1,0 +1,11 @@
+image:
+  tag: "latest"
+
+kafka:
+  brokers: "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9093"
+  security:
+    enabled: true
+    saslMechanism: SCRAM-SHA-512
+    saslUser: my-user
+    saslPasswordSecret: my-user
+    caCertSecret: my-cluster-cluster-ca-cert
