@@ -1,4 +1,4 @@
 {
-  "apps/sample-api": "0.1.1",
-  "apps/sample-worker": "0.2.0"
+  "apps/sample-api": "0.1.2",
+  "apps/sample-worker": "0.3.0"
 }
