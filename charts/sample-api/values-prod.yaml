@@ -1,12 +1,9 @@
 image:
-  tag: "0.1.0"
-
+  tag: 0.1.1
 replicaCount: 3
-
 service:
   type: ClusterIP
   port: 3000
-
 resources:
   limits:
     cpu: 1000m
@@ -14,19 +11,17 @@ resources:
   requests:
     cpu: 500m
     memory: 512Mi
-
 env:
   - name: LOG_LEVEL
-    value: "warn"
+    value: warn
   - name: ENVIRONMENT
-    value: "prod"
-
+    value: prod
 ingress:
   enabled: true
-  className: "nginx"
+  className: nginx
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: '100'
   hosts:
     - host: sample-api.example.com
       paths:
