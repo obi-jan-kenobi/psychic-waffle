@@ -6,14 +6,24 @@ name: Release Retag Gate
 # version. Promoting prod here means the commit release-please tags already
 # contains the released prod manifest, so prod ArgoCD can pin an immutable
 # targetRevision: <app>-v<version>.
+#
+# Invoked from release-please.yml when prs_created is true (GITHUB_TOKEN pushes
+# do not trigger pull_request workflows). Also runs on pull_request as a
+# fallback when the PR branch is updated externally.
 
 on:
   pull_request:
     branches: [main]
     types: [opened, reopened, synchronize]
+  workflow_call:
+    inputs:
+      head_ref:
+        description: Release-please PR branch to retag
+        required: true
+        type: string
 
 concurrency:
-  group: release-retag-${{ github.ref }}
+  group: release-retag-${{ github.event_name == 'workflow_call' && inputs.head_ref || github.head_ref }}
   cancel-in-progress: true
 
 permissions:
@@ -25,13 +35,19 @@ env:
 
 jobs:
   retag:
-    # Only run for release-please PRs.
-    if: startsWith(github.head_ref, 'release-please--')
+    # pull_request: only release-please branches. workflow_call: always.
+    if: github.event_name == 'workflow_call' || startsWith(github.head_ref, 'release-please--')
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve PR branch
+        id: branch
+        env:
+          HEAD_REF: ${{ github.event_name == 'workflow_call' && inputs.head_ref || github.head_ref }}
+        run: echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ steps.branch.outputs.ref }}
           fetch-depth: 0
 
       - name: Install yq
@@ -91,6 +107,8 @@ jobs:
           done
 
       - name: Commit version updates to PR branch
+        env:
+          HEAD_REF: ${{ steps.branch.outputs.ref }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -100,4 +118,4 @@ jobs:
           fi
           git add charts/*/values-npn.yaml charts/*/values-prod.yaml
           git commit -m "chore: point npn and prod at release version"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:"$HEAD_REF"

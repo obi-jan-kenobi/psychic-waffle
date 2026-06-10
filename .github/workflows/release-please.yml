@@ -15,13 +15,43 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      prs: ${{ steps.release.outputs.prs }}
     steps:
       - id: release
         uses: googleapis/release-please-action@v4
         with:
-          # A PAT (not the default GITHUB_TOKEN) is required so that commits
-          # release-please pushes to its PR branch trigger the retag gate
-          # workflow. Default GITHUB_TOKEN pushes do not trigger workflows.
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  prepare-retag:
+    needs: release-please
+    if: needs.release-please.outputs.prs_created == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      head_refs: ${{ steps.extract.outputs.head_refs }}
+    steps:
+      - id: extract
+        env:
+          PRS: ${{ needs.release-please.outputs.prs }}
+        run: |
+          set -euo pipefail
+          head_refs=$(echo "$PRS" | jq -c '[.[].headBranchName]')
+          echo "head_refs=$head_refs" >> "$GITHUB_OUTPUT"
+
+  retag:
+    needs: [release-please, prepare-retag]
+    if: needs.release-please.outputs.prs_created == 'true'
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        head_ref: ${{ fromJSON(needs.prepare-retag.outputs.head_refs) }}
+    uses: ./.github/workflows/release-retag.yml
+    with:
+      head_ref: ${{ matrix.head_ref }}
+    secrets: inherit
