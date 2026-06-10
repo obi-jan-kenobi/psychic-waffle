@@ -9,12 +9,12 @@
       "extra-files": [
         {
           "type": "yaml",
-          "path": "../../charts/sample-api/Chart.yaml",
+          "path": "/charts/sample-api/Chart.yaml",
           "jsonpath": "$.appVersion"
         },
         {
           "type": "yaml",
-          "path": "../../charts/sample-api/values-prod.yaml",
+          "path": "/charts/sample-api/values-prod.yaml",
           "jsonpath": "$.image.tag"
         }
       ]
@@ -24,12 +24,12 @@
       "extra-files": [
         {
           "type": "yaml",
-          "path": "../../charts/sample-worker/Chart.yaml",
+          "path": "/charts/sample-worker/Chart.yaml",
           "jsonpath": "$.appVersion"
         },
         {
           "type": "yaml",
-          "path": "../../charts/sample-worker/values-prod.yaml",
+          "path": "/charts/sample-worker/values-prod.yaml",
           "jsonpath": "$.image.tag"
         }
       ]
