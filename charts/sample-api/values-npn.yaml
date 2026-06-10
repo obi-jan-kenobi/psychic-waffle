@@ -1,12 +1,9 @@
 image:
-  tag: "0.1.0"
-
+  tag: "01e8d23ceba3c957656d674f155d8f232dff3b3c"
 replicaCount: 2
-
 service:
   type: ClusterIP
   port: 3000
-
 resources:
   limits:
     cpu: 500m
@@ -14,13 +11,11 @@ resources:
   requests:
     cpu: 200m
     memory: 256Mi
-
 env:
   - name: LOG_LEVEL
     value: "info"
   - name: ENVIRONMENT
     value: "npn"
-
 ingress:
   enabled: true
   className: "nginx"
