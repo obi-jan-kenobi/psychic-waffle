@@ -1,10 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "node",
-  "include-component-in-tag": false,
+  "include-component-in-tag": true,
   "always-update": true,
   "packages": {
     "apps/sample-api": {
+      "component": "sample-api",
       "package-name": "sample-api",
       "extra-files": [
         {
@@ -20,6 +21,7 @@
       ]
     },
     "apps/sample-worker": {
+      "component": "sample-worker",
       "package-name": "sample-worker",
       "extra-files": [
         {
