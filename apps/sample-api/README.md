@@ -35,5 +35,3 @@ npm test
 docker build -t sample-api:latest .
 docker run -p 3000:3000 sample-api:latest
 ```
-
-test
