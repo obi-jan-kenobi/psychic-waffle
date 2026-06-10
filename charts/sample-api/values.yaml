@@ -1,6 +1,6 @@
 image:
-  registry: 514502807230.dkr.ecr.eu-west-1.amazonaws.com
-  repository: sample-api
+  registry: ghcr.io
+  repository: OWNER/sample-api
   tag: "latest"
   pullPolicy: IfNotPresent
 

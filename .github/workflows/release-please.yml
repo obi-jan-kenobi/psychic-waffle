@@ -22,7 +22,6 @@ jobs:
           # A PAT (not the default GITHUB_TOKEN) is required so that commits
           # release-please pushes to its PR branch trigger the retag gate
           # workflow. Default GITHUB_TOKEN pushes do not trigger workflows.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-

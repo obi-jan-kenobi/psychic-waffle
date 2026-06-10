@@ -1,6 +1,0 @@
-apiVersion: v2
-name: telematics-kafka-bridge
-description: HTTP-to-Kafka bridge for telematics ingestion
-type: application
-version: 0.1.0
-appVersion: "0.1.0"
